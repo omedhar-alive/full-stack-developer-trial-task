@@ -5,43 +5,60 @@ use App\Scraping\Extractors\JumiaExtractor;
 use App\Scraping\ProductData;
 use Symfony\Component\DomCrawler\Crawler;
 
-const JUMIA_FIXTURE_URL = 'https://www.jumia.com.eg/apple-iphone-17-pro-max-6.9-256gb-rom-ios-26-5g-cosmic-orange-134276913.html';
+/**
+ * Loads the Jumia entry from the fixture manifest — no hardcoded filename, so
+ * added fixtures are picked up automatically.
+ *
+ * @return array{html: string, url: string}
+ */
+function jumiaFixture(): array
+{
+    $dir = config('scraping.fixtures_path');
+    $manifest = json_decode(file_get_contents($dir.'/manifest.json'), true);
+
+    $entry = collect($manifest)->firstWhere(
+        fn (array $e) => str_contains(parse_url($e['source_url'], PHP_URL_HOST) ?? '', 'jumia.')
+    );
+
+    expect($entry)->not->toBeNull();
+
+    return [
+        'html' => file_get_contents($dir.'/'.$entry['file']),
+        'url' => $entry['source_url'],
+    ];
+}
 
 it('extracts every ProductData field from the saved Jumia product page', function () {
-    $html = file_get_contents(base_path('tests/Fixtures/jumia.html'));
+    ['html' => $html, 'url' => $url] = jumiaFixture();
 
     $crawler = new Crawler;
     $crawler->addHtmlContent($html, 'UTF-8');
 
-    $product = (new JumiaExtractor)->extract($crawler, JUMIA_FIXTURE_URL);
+    $product = (new JumiaExtractor)->extract($crawler, $url);
 
     expect($product)->toBeInstanceOf(ProductData::class)
         ->and($product->title)->toBe('iPhone 17 Pro Max 6.9" 256GB ROM iOS 26 5G - Cosmic Orange')
         ->and($product->priceMinor)->toBe(9277700)
         ->and($product->currency)->toBe('EGP')
         ->and($product->imageUrl)->toBe('https://eg.jumia.is/unsafe/fit-in/680x680/filters:fill(white)/product/31/9672431/1.jpg?7647')
-        ->and($product->sourceUrl)->toBe(JUMIA_FIXTURE_URL);
+        ->and($product->sourceUrl)->toBe($url);
 });
 
 it('throws ExtractionFailedException naming the URL and selector when the JSON-LD Product block is gone', function () {
-    // Not a faked product page — a page with the structured data simply absent,
-    // which is what a breaking markup change looks like.
+    $url = jumiaFixture()['url'];
     $crawler = new Crawler('<!doctype html><html><head><title>x</title></head><body><h1>No data here</h1></body></html>');
 
     try {
-        (new JumiaExtractor)->extract($crawler, JUMIA_FIXTURE_URL);
+        (new JumiaExtractor)->extract($crawler, $url);
         $this->fail('expected ExtractionFailedException');
     } catch (ExtractionFailedException $e) {
         expect($e->getMessage())
-            ->toContain(JUMIA_FIXTURE_URL)
+            ->toContain($url)
             ->toContain('application/ld+json');
     }
 });
 
 it('throws (does not return null) when an in-stock offer has no price', function () {
-    // An available product with no price is a broken markup assumption, not a
-    // business state — it must not be skipped silently. Minimal JSON-LD for the
-    // one branch, in the style of the missing-block test above.
     $json = json_encode([
         '@context' => 'https://schema.org',
         '@type' => 'Product',
@@ -59,11 +76,11 @@ it('throws (does not return null) when an in-stock offer has no price', function
     );
 
     try {
-        (new JumiaExtractor)->extract($crawler, JUMIA_FIXTURE_URL);
+        (new JumiaExtractor)->extract($crawler, jumiaFixture()['url']);
         $this->fail('expected ExtractionFailedException');
     } catch (ExtractionFailedException $e) {
         expect($e->getMessage())
-            ->toContain(JUMIA_FIXTURE_URL)
+            ->toContain(jumiaFixture()['url'])
             ->toContain('Product.offers.price');
     }
 });
