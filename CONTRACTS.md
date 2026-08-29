@@ -181,16 +181,32 @@ Extractors throw `ExtractionFailedException` when a required selector matches no
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `BIGINT UNSIGNED` PK | |
-| `source_url` | `VARCHAR(512)` **UNIQUE** | key for `updateOrCreate` |
-| `price_minor` | `BIGINT UNSIGNED` | 12999, never 129.99 |
-| `currency` | `CHAR(3)` | ISO 4217 — `EGP`, `USD` |
+| `title` | `VARCHAR(512)` NOT NULL | long product titles are common |
+| `price_minor` | `BIGINT UNSIGNED` NOT NULL | 12999, never 129.99 |
+| `currency` | `CHAR(3)` NOT NULL | ISO 4217 — `EGP`, `USD` |
+| `image_url` | `TEXT` NOT NULL | CDN URLs exceed 255 chars |
+| `source_url` | `VARCHAR(768)` **UNIQUE** | key for `updateOrCreate` |
 | `created_at` / `updated_at` | `TIMESTAMP` | |
 
-Remaining columns pending the field list.
+Eight columns, no additions. The task asked for `id, title, price,
+image_url, created_at`. `price` becomes `price_minor` + `currency`;
+`source_url` is added to make re-scraping idempotent. Both deviations are
+documented in the README.
 
-`source_url` unique is what makes re-scraping idempotent. Without it, every run duplicates the catalogue.
+`source_url` unique is what makes re-scraping idempotent. Without it, every
+run duplicates the catalogue.
 
-`VARCHAR(512)` because a 767-byte index limit applies under some MySQL configurations; 512 chars of `utf8mb4` exceeds it, so the unique index is declared on a **prefix**: `$table->unique([DB::raw('source_url(191)')])` or an explicit `ALTER`. Confirm the exact syntax against Laravel 13 docs at build time — this is the kind of thing that only fails when the migration runs.
+`VARCHAR(768)` is the full-column unique index, no prefix. MySQL 8.4
+defaults to the DYNAMIC row format, which allows a 3072-byte index key —
+768 characters of `utf8mb4`. The 767-byte limit applies only to the legacy
+REDUNDANT and COMPACT formats.
+
+A prefix index was considered and rejected: `source_url(191)` would enforce
+uniqueness on the first 191 characters only, so two different products
+whose URLs share a long prefix would collide and `updateOrCreate` would
+overwrite one with the other. Silent data loss.
+
+`price_minor` is unsigned — a price can never be negative.
 
 ---
 
@@ -205,10 +221,12 @@ Query params: `?page=1`. Nothing else.
   "data": [
     {
       "id": 1,
-      "source_url": "https://www.jumia.com.eg/...",
+      "title": "Infinix Hot 40i 256GB",
       "price": 129.99,
       "currency": "EGP",
-      "created_at": "2026-08-29T10:14:02Z"
+      "image_url": "https://eg.jumia.is/...",
+      "source_url": "https://www.jumia.com.eg/...",
+      "created_at": "2026-08-29T10:14:02.000000Z"
     }
   ],
   "links": { "first": "...", "last": "...", "prev": null, "next": "..." },
@@ -216,9 +234,19 @@ Query params: `?page=1`. Nothing else.
 }
 ```
 
-The frontend reads `response.data`. Not `response`. Laravel emits `links` alongside `meta` — the frontend can ignore it, but the TypeScript type must not forbid it.
+The frontend reads `response.data`. Not `response`. Laravel emits `links`
+alongside `meta` — the frontend can ignore it, but the TypeScript type must
+not forbid it.
 
-`price` is a **number in major units**, already divided by 100 in `ProductResource`. `price_minor` is never exposed. The frontend does no arithmetic on money and has no `/ 100` anywhere in it.
+`created_at` is Laravel's default ISO-8601 with microseconds. Match it
+exactly in the TS type and in any test asserting on it.
+
+`price` is a **number in major units**, already divided by 100 in
+`ProductResource`. `price_minor` is never exposed. The frontend does no
+arithmetic on money and has no `/ 100` anywhere in it — that is what makes
+a float safe here.
+
+Ordering: `orderByDesc('created_at')`, 20 per page.
 
 Rate limit: `throttle:60,1`.
 
