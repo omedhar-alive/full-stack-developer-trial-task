@@ -27,6 +27,10 @@ return [
     // Check robots.txt before a live fetch. Skipped entirely when false.
     'respect_robots' => filter_var(env('SCRAPER_RESPECT_ROBOTS', true), FILTER_VALIDATE_BOOL),
 
+    // Attempt a live scrape of `targets` at container start, after the fixture
+    // seed. Off makes boot fully offline.
+    'seed_live' => filter_var(env('SCRAPER_SEED_LIVE', true), FILTER_VALIDATE_BOOL),
+
     // Where fixture mode reads HTML and manifest.json from.
     'fixtures_path' => resource_path('fixtures'),
 

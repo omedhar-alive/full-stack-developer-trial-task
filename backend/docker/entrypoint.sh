@@ -34,6 +34,31 @@ php artisan package:discover --quiet
 case "${1:-}" in
     -*)
         php artisan migrate --force --no-interaction
+
+        # Seed from committed fixtures so the reviewer's first `docker compose
+        # up` shows a populated UI without reading the README. No network,
+        # idempotent (updateOrCreate on source_url), never fatal — a bad
+        # fixture must not take down the container.
+        php artisan scrape:run --sync || echo "fixture seed failed; continuing"
+
+        # Drop any pending jobs from a previous boot before re-dispatching the
+        # live seed. Without this, a job serialized by an older image shape
+        # survives in the (volume-backed) jobs table and crashes the new
+        # worker on unserialize. Safe here: this is a review stack that
+        # re-seeds every boot, not a system with real queued work.
+        php artisan queue:clear --force >/dev/null 2>&1 || true
+
+        # Then attempt the live targets, QUEUED not inline: it must not slow
+        # or block boot, and the queued path already gives us 3 tries with
+        # 10/30/60s backoff plus a failed_jobs row carrying the URL and the
+        # reason. A live failure is expected and harmless — the grid is
+        # already populated above, and the fallback is the feature. This is
+        # what makes a default `docker compose up` exercise the lease/report
+        # loop rather than only the parsing path.
+        # Review convenience; a real deployment would not seed on start.
+        if [ "${SCRAPER_SEED_LIVE:-true}" = "true" ]; then
+            php artisan scrape:run --live || echo "live seed dispatch failed; continuing"
+        fi
         ;;
 esac
 

@@ -10,6 +10,7 @@ use App\Scraping\Fetchers\LiveFetcher;
 use App\Scraping\ProductScraper;
 use App\Scraping\ProxyClient;
 use App\Scraping\RobotsChecker;
+use App\Scraping\ScraperFactory;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,23 +26,21 @@ class AppServiceProvider extends ServiceProvider
             $app->make(JumiaExtractor::class),
         ));
 
-        // Transport is chosen by SCRAPER_MODE. bind() (not singleton) so a test
+        // A configured LiveFetcher, always. Fetcher::class returns this in live
+        // mode, and ScraperFactory::live() uses it directly for --live.
+        $this->app->bind(LiveFetcher::class, fn (Application $app) => new LiveFetcher(
+            connectTimeout: $app['config']['scraping.connect_timeout'],
+            readTimeout: $app['config']['scraping.read_timeout'],
+            maxRetries: $app['config']['scraping.max_retries'],
+            maxRedirects: $app['config']['scraping.max_redirects'],
+            throttleMs: $app['config']['scraping.throttle_ms'],
+        ));
+
+        // Transport chosen by SCRAPER_MODE. bind() (not singleton) so a test
         // that flips config('scraping.mode') gets the matching fetcher.
-        $this->app->bind(Fetcher::class, function (Application $app) {
-            $config = $app['config']['scraping'];
-
-            if ($config['mode'] === 'fixture') {
-                return new FixtureFetcher($config['fixtures_path']);
-            }
-
-            return new LiveFetcher(
-                connectTimeout: $config['connect_timeout'],
-                readTimeout: $config['read_timeout'],
-                maxRetries: $config['max_retries'],
-                maxRedirects: $config['max_redirects'],
-                throttleMs: $config['throttle_ms'],
-            );
-        });
+        $this->app->bind(Fetcher::class, fn (Application $app) => $app['config']['scraping.mode'] === 'fixture'
+            ? new FixtureFetcher($app['config']['scraping.fixtures_path'])
+            : $app->make(LiveFetcher::class));
 
         $this->app->bind(ProxyClient::class, fn (Application $app) => new ProxyClient(
             $app['config']['scraping.proxy_service_url'],
@@ -52,13 +51,16 @@ class AppServiceProvider extends ServiceProvider
             (bool) $app['config']['scraping.respect_robots'],
         ));
 
-        $this->app->bind(ProductScraper::class, fn (Application $app) => new ProductScraper(
+        $this->app->bind(ScraperFactory::class, fn (Application $app) => new ScraperFactory(
             $app->make(ExtractorResolver::class),
-            $app->make(Fetcher::class),
             $app->make(ProxyClient::class),
             $app->make(RobotsChecker::class),
-            $app['config']['scraping.mode'],
+            $app->make(Fetcher::class),
+            $app->make(LiveFetcher::class),
         ));
+
+        // One source of truth: the plain ProductScraper is the factory's default.
+        $this->app->bind(ProductScraper::class, fn (Application $app) => $app->make(ScraperFactory::class)->default());
     }
 
     public function boot(): void

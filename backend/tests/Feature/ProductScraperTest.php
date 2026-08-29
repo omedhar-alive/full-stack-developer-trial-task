@@ -4,6 +4,7 @@ use App\Models\Product;
 use App\Scraping\ExtractorResolver;
 use App\Scraping\Extractors\JumiaExtractor;
 use App\Scraping\ProductScraper;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
@@ -16,23 +17,7 @@ beforeEach(function () {
     config()->set('scraping.respect_robots', true);
 });
 
-/** The real served Jumia HTML, used as a fake target response in live-mode tests. */
-function fixtureHtml(): string
-{
-    $dir = config('scraping.fixtures_path');
-    $manifest = json_decode(file_get_contents($dir.'/manifest.json'), true);
-
-    return file_get_contents($dir.'/'.$manifest[0]['file']);
-}
-
-function fixtureUrl(): string
-{
-    $dir = config('scraping.fixtures_path');
-
-    return json_decode(file_get_contents($dir.'/manifest.json'), true)[0]['source_url'];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// fixtureHtml() / fixtureUrl() live in tests/Pest.php — shared with ScrapeCommandTest.
 
 it('completes the scrape and writes a product even when the Go proxy service is unreachable', function () {
     // THE HEADLINE TEST — the one the voice note refers to.
@@ -142,4 +127,65 @@ it('runs fixture mode end to end from the manifest with no network touched', fun
         ->and($product->currency)->toBe('EGP')
         ->and($product->source_url)->toBe(fixtureUrl());
     Http::assertNothingSent();
+});
+
+/** Live-mode fake set with the target returning $status. */
+function blockedFakes(int $status): array
+{
+    return [
+        'www.jumia.com.eg/robots.txt' => Http::response("User-agent: *\nDisallow: /nope\n", 200),
+        'proxy:8080/lease' => Http::response(['lease_id' => 'LX', 'proxy_url' => null, 'user_agent' => 'UA'], 200),
+        'proxy:8080/report' => Http::response('', 204),
+        'www.jumia.com.eg/apple-*' => Http::response('blocked', $status),
+    ];
+}
+
+it('reports a 403 from the target to Go with its real status and lets the exception propagate', function () {
+    config()->set('scraping.mode', 'live');
+    Http::fake(blockedFakes(403));
+
+    try {
+        app(ProductScraper::class)->scrape(fixtureUrl());
+        $this->fail('expected RequestException');
+    } catch (RequestException $e) {
+        expect($e->response->status())->toBe(403);
+    }
+
+    expect(Product::count())->toBe(0);
+    Http::assertSent(fn ($r) => $r->url() === 'http://proxy:8080/report'
+        && $r['lease_id'] === 'LX'
+        && $r['ok'] === false
+        && $r['status_code'] === 403);
+});
+
+it('does not retry a 403 — the target is requested exactly once', function () {
+    config()->set('scraping.mode', 'live');
+    Http::fake(blockedFakes(403));
+
+    try {
+        app(ProductScraper::class)->scrape(fixtureUrl());
+    } catch (RequestException) {
+        // expected
+    }
+
+    $targetHits = Http::recorded(fn ($request) => str_contains($request->url(), '/apple-'))->count();
+    expect($targetHits)->toBe(1);
+});
+
+it('retries a 500 to the configured limit (3 attempts) and reports status 500', function () {
+    config()->set('scraping.mode', 'live');
+    config()->set('scraping.max_retries', 2); // 1 initial + 2 retries
+    Http::fake(blockedFakes(500));
+
+    try {
+        app(ProductScraper::class)->scrape(fixtureUrl());
+        $this->fail('expected RequestException');
+    } catch (RequestException $e) {
+        expect($e->response->status())->toBe(500);
+    }
+
+    expect(Http::recorded(fn ($request) => str_contains($request->url(), '/apple-'))->count())->toBe(3);
+    Http::assertSent(fn ($r) => $r->url() === 'http://proxy:8080/report'
+        && $r['ok'] === false
+        && $r['status_code'] === 500);
 });

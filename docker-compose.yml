@@ -26,6 +26,7 @@ x-laravel-env: &laravel-env
   SCRAPER_MAX_REDIRECTS: "3"
   SCRAPER_THROTTLE_MS: "2000"
   SCRAPER_RESPECT_ROBOTS: "true"
+  SCRAPER_SEED_LIVE: "true"
 
 services:
   mysql:

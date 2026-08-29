@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Scraping\Contracts\Fetcher;
 use App\Scraping\Contracts\SiteExtractor;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -13,10 +14,14 @@ use Symfony\Component\DomCrawler\Crawler;
  * Orchestrates one scrape end to end.
  *
  * Live order: resolve extractor by host → robots check → lease → fetch →
- * report → extract → persist. The report goes out BEFORE extraction runs: a
- * transport success is a transport success even if the markup then fails to
- * parse, and reporting a parse failure back to Go would bench a healthy proxy
- * for a site-markup problem.
+ * report → extract → persist.
+ *
+ * Every transport outcome is reported to Go — success, a failed response with
+ * its real status, or a connection failure as status 0. Go, not Laravel,
+ * decides which of those is proxy-attributable (CONTRACTS.md §3). The ONLY
+ * outcome that goes unreported is an extraction/parse failure: the markup
+ * breaking is not the proxy's fault, and reporting it would bench a healthy
+ * identity for a site problem.
  *
  * Fixture mode swaps only the transport — no robots check, no lease, no report.
  *
@@ -49,13 +54,19 @@ final class ProductScraper
         }
 
         $lease = $this->proxy->lease();
+        $startedAt = hrtime(true);
 
         try {
             $result = $this->fetcher->fetch($url, $lease);
         } catch (ConnectionException $e) {
-            // No response — report a proxy-attributable failure, then let the
-            // scrape fail into failed_jobs.
-            $this->proxy->report($lease, null, false, 0);
+            // No response at all — status 0 per CONTRACTS §3.
+            $this->proxy->report($lease, null, false, $this->elapsedMs($startedAt));
+            throw $e;
+        } catch (RequestException $e) {
+            // A response arrived and it was a failure (retries exhausted).
+            // Report the REAL status — Go decides whether it is
+            // proxy-attributable (403/407/408/429/502/503/504), not Laravel.
+            $this->proxy->report($lease, $e->response->status(), false, $this->elapsedMs($startedAt));
             throw $e;
         }
 
@@ -86,5 +97,10 @@ final class ProductScraper
                 'image_url' => $data->imageUrl,
             ],
         );
+    }
+
+    private function elapsedMs(int $startedAt): int
+    {
+        return (int) ((hrtime(true) - $startedAt) / 1_000_000);
     }
 }
