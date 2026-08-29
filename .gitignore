@@ -1,0 +1,46 @@
+# --- Environment ---
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# --- Local working notes (not part of the deliverable) ---
+CLAUDE.local.md
+.claude/
+
+# --- PHP / Laravel ---
+/backend/vendor/
+/backend/public/storage
+/backend/public/hot
+/backend/.phpunit.result.cache
+/backend/.phpunit.cache/
+/backend/storage/*.key
+/backend/storage/pail
+
+# --- Node / Next.js ---
+node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+/frontend/.turbo/
+/frontend/next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Go ---
+/proxy-manager/proxy-manager
+/proxy-manager/bin/
+*.test
+coverage.out
+
+# --- Docker ---
+/docker/mysql-data/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
