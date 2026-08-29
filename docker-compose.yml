@@ -1,0 +1,115 @@
+name: scraper-trial
+
+# Shared Laravel environment for the backend (web) and worker containers.
+# Values are local-development defaults, not secrets. Compose environment
+# entries win over the container's .env file, so this is the source of truth.
+x-laravel-env: &laravel-env
+  APP_ENV: local
+  APP_DEBUG: "true"
+  APP_URL: http://localhost:8000
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: debug
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: scraper
+  DB_USERNAME: scraper
+  DB_PASSWORD: scraper
+  QUEUE_CONNECTION: database
+  SESSION_DRIVER: database
+  CACHE_STORE: database
+  PROXY_SERVICE_URL: http://proxy:8080
+  SCRAPER_MODE: fixture
+  SCRAPER_CONNECT_TIMEOUT: "15"
+  SCRAPER_READ_TIMEOUT: "15"
+  SCRAPER_MAX_RETRIES: "2"
+  SCRAPER_MAX_REDIRECTS: "3"
+  SCRAPER_THROTTLE_MS: "2000"
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: scraper
+      MYSQL_USER: scraper
+      MYSQL_PASSWORD: scraper
+    ports:
+      # Published on 3307 — reviewers often already have a local MySQL on 3306
+      # (CONTRACTS.md section 1).
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      <<: *laravel-env
+      SERVER_NAME: ":8000"
+    volumes:
+      # Shared APP_KEY, generated once by whichever container starts first.
+      - laravel-key:/keys
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=3", "--max-time=3600"]
+    environment:
+      <<: *laravel-env
+    volumes:
+      - laravel-key:/keys
+    # The worker runs no HTTP server, so the image's HTTP healthcheck does not
+    # apply to it.
+    healthcheck:
+      disable: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  proxy:
+    build:
+      context: ./proxy-manager
+    environment:
+      PORT: "8080"
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    environment:
+      API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  mysql-data:
+  laravel-key:
