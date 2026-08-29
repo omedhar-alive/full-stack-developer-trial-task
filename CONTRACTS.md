@@ -201,7 +201,7 @@ interface SiteExtractor
 }
 ```
 
-`extract()` returns `null` in exactly one case: the page is valid but the product is legitimately out of stock and carries no price. The caller logs at info level and skips it. Every other problem — malformed price text, missing title, markup that changed — throws. Null is not a general failure signal.
+The distinction is availability, not the absence of a price. An offer whose availability says out-of-stock returns `null`. An offer that reads as in-stock but carries no price **throws** `ExtractionFailedException::missing()` naming `Product.offers.price` — that is a broken assumption about the markup, not a business state. Skipping it silently would mean a renamed price field turns every product into a `null` while jobs keep reporting success; recorded in `failed_jobs`, a spike in failures is the signal that the site changed.
 
 `extract()` receives `$sourceUrl` as well as the DOM — the extractor is the only place that knows how to resolve a site's relative image URLs, and it needs the base URL to do it.
 

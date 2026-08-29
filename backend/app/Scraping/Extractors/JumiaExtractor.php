@@ -35,7 +35,8 @@ final class JumiaExtractor implements SiteExtractor
 
         $offer = $this->firstOffer($product);
 
-        // Legitimately unavailable — not an error. Caller logs at info and skips.
+        // The one and only null case: the product is legitimately out of stock.
+        // A business state, not an error — the caller logs at info and skips.
         if ($this->isOutOfStock($offer)) {
             return null;
         }
@@ -47,9 +48,11 @@ final class JumiaExtractor implements SiteExtractor
 
         $rawPrice = $this->str($offer['price'] ?? null);
         if ($rawPrice === null) {
-            // In stock as far as we can tell, but no price on the page. Treat as
-            // out of stock rather than inventing a number.
-            return null;
+            // In stock but no price means our reading of the markup broke, not
+            // that the item is unavailable. Returning null here would let a
+            // renamed price field null every product while jobs keep reporting
+            // success. Throw so a spike in failed_jobs surfaces the change.
+            throw ExtractionFailedException::missing($sourceUrl, 'Product.offers.price');
         }
 
         $currency = $this->str($offer['priceCurrency'] ?? null);

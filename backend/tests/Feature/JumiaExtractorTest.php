@@ -38,10 +38,40 @@ it('throws ExtractionFailedException naming the URL and selector when the JSON-L
     }
 });
 
+it('throws (does not return null) when an in-stock offer has no price', function () {
+    // An available product with no price is a broken markup assumption, not a
+    // business state — it must not be skipped silently. Minimal JSON-LD for the
+    // one branch, in the style of the missing-block test above.
+    $json = json_encode([
+        '@context' => 'https://schema.org',
+        '@type' => 'Product',
+        'name' => 'A Product That Is In Stock',
+        'image' => 'https://eg.jumia.is/x.jpg',
+        'offers' => [
+            '@type' => 'Offer',
+            'availability' => 'https://schema.org/InStock',
+            'priceCurrency' => 'EGP',
+            // no "price"
+        ],
+    ]);
+    $crawler = new Crawler(
+        '<!doctype html><html><body><script type="application/ld+json">'.$json.'</script></body></html>'
+    );
+
+    try {
+        (new JumiaExtractor)->extract($crawler, JUMIA_FIXTURE_URL);
+        $this->fail('expected ExtractionFailedException');
+    } catch (ExtractionFailedException $e) {
+        expect($e->getMessage())
+            ->toContain(JUMIA_FIXTURE_URL)
+            ->toContain('Product.offers.price');
+    }
+});
+
 it('returns null (not an exception, not a row) for an out-of-stock Jumia page', function () {
     // Jumia removes out-of-stock products from its catalogue and 302s dead
     // product URLs to the homepage, so a real out-of-stock page could not be
     // fetched for a fixture. Per the phase 3 brief, skipping rather than
-    // hand-writing markup. The null path itself lives in
-    // JumiaExtractor::isOutOfStock() and the missing-price branch.
+    // hand-writing markup. The null path now lives solely in
+    // JumiaExtractor::isOutOfStock().
 })->skip('no real out-of-stock Jumia page could be obtained');
