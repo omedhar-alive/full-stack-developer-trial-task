@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# ---- vendor (Composer dependencies, production only) ----
+# ---- vendor (Composer dependencies) ----
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY . .
+# Dev dependencies (Pest and friends) are kept so the review stack can run
+# `php artisan test` inside the container. A hardened production build would add
+# --no-dev here (or use a separate final stage).
 RUN composer install \
-      --no-dev --no-interaction --prefer-dist \
+      --no-interaction --prefer-dist \
       --optimize-autoloader --no-scripts
 
 # ---- runtime ----

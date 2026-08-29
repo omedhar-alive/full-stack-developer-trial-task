@@ -12,7 +12,6 @@
 /public/build
 /public/hot
 /database/database.sqlite
-/tests
 /.phpunit.cache
 .phpunit.result.cache
 *.md
