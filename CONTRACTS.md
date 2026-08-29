@@ -55,11 +55,14 @@ Names are frozen because they appear in `.env.example`, `docker-compose.yml`, co
 | `SCRAPER_MAX_RETRIES` | `2` | Guzzle retry middleware |
 | `SCRAPER_MAX_REDIRECTS` | `3` | redirect chain cap |
 | `SCRAPER_THROTTLE_MS` | `2000` | delay between requests |
+| `SCRAPER_RESPECT_ROBOTS` | `true` | check robots.txt before a live fetch |
 | `QUEUE_CONNECTION` | `database` | no Redis container |
 | `DB_HOST` | `mysql` | service name |
 | `DB_PORT` | `3306` | container port, not host port |
 
 `SCRAPER_MODE` defaults to `fixture` so a clean clone produces products on first run.
+
+Every var in this table must appear in `backend/.env.example` **and** in the `x-laravel-env` block of `docker-compose.yml`. A var that exists in one and not the other is a var whose documented default is a lie.
 
 ### frontend (Next.js)
 
@@ -91,7 +94,7 @@ No parameters. The pool is global, not per-host — per-host pools are a scaling
 
 `lease_id` is an opaque string. Laravel never parses it, only echoes it back.
 
-`proxy_url` is **`null`** when the entry is a direct connection, never `""`. Laravel passes it straight into Guzzle as `'proxy' => $lease->proxyUrl`, and Guzzle needs an absent value, not an empty string. This one field is the whole "real proxies drop in without a code change" claim.
+`proxy_url` is **`null`** when the entry is a direct connection, never `""`. Laravel omits the `proxy` request option entirely when it is null, and sets `'proxy' => $lease->proxyUrl` only when it is a string — Guzzle 8 validates that option strictly and rejects non-string values. That single conditional is the whole "real proxies drop in without a code change" claim: put a URL in `proxies.json` and traffic routes through it, no code edit.
 
 **503** — every entry is cooling down, or the pool is empty.
 ```json
@@ -219,6 +222,24 @@ Text that cannot be parsed **throws**. It never defaults to `0`. Because `update
 
 Picks an extractor by URL host. An unsupported host throws a clear, typed exception. No silent null.
 
+### HTTP client
+
+All outbound HTTP — the target site and the Go service — goes through Laravel's HTTP client (`Illuminate\Http\Client`), which wraps Guzzle. `guzzlehttp/guzzle` is an explicit `composer.json` requirement, not a transitive one, because the scraper passes Guzzle's own option keys (`proxy`, `allow_redirects`, `connect_timeout`) straight through `withOptions()`.
+
+Guzzle 8.0 (July 2026) reworked the exception hierarchy: `NetworkException` is now the base for no-response failures and timeouts split into connect-phase, network, and response-aware classes. Laravel's client catches `TransferException` at the root of that tree and normalises every transport failure to `Illuminate\Http\Client\ConnectionException`. That is the single class the fallback catches. Catching `GuzzleHttp\Exception\ConnectException` instead would miss timeouts — the exact failure the fallback exists for.
+
+Mapping to `POST /report`: a `ConnectionException` reports `ok:false`, `status_code:0`. A received response reports `ok` from `successful()` and the real `status()`. A failed report is logged and never rethrown — losing health data must not fail a scrape that otherwise worked.
+
+### Fixture mode
+
+`SCRAPER_MODE=fixture` reads saved HTML from `resources/fixtures/` instead of making a request. Not a stub: the same extractor, resolver, parser and persistence path run, only the transport is swapped. It exists so a clean clone produces products on first `docker compose up` without depending on Jumia being reachable or unchanged.
+
+`resources/fixtures/manifest.json` is a list of objects with keys `"file"`, `"source_url"` and `"captured_at"` (YYYY-MM-DD). Fixture mode iterates it and passes each `source_url` to the extractor as the page's own URL — invented URLs would break `updateOrCreate` reconciliation against live mode and duplicate every product. HTML files are stored byte-for-byte as served; provenance lives in the manifest, never in a comment inside the file.
+
+Fixtures go stale silently: markup changes, live scraping breaks, fixture tests keep passing. `captured_at` is what makes that visible, and the README states it as a known limitation.
+
+Fixture mode makes no network request, so it takes no lease and sends no report — a fabricated success would poison the pool's health data. The lease loop is exercised in live mode only; the README must tell the reviewer how to see it.
+
 ---
 
 ## 5. Database — `products`
@@ -297,3 +318,4 @@ Laravel 11+ ships a `/up` route already. Add `/api/health` anyway so all three s
 
 - **Phase 2.** Added `LEASE_TTL_SECONDS` to section 2. Recorded the settled circuit-breaker behaviour in section 3.
 - **Phase 3.** Product field list resolved from the task description (`id, title, price, image_url, created_at`); the open question that previously sat at the bottom of this file is closed. Section 4 gained the target-site list, the price-parsing rule and the `?ProductData` return type. Section 5 gained `title` and `image_url` and moved `source_url` from `VARCHAR(512)` with a prefix index to `VARCHAR(768)` with a full-column unique index. Section 6 pinned. Final scope is Jumia only: Amazon/eBay return 403 to a plain HTTP request, Noon renders its price client-side, Shein serves a captcha; Jumia serves the price in the HTML. The interface and resolver stay — a second site is a new file plus a registration.
+- **Phase 4.** Section 3 `GET /lease`: `proxy_url` handling spelled out — the `proxy` option is omitted when null, set only when a string (Guzzle 8 validates it strictly and rejects non-strings). Section 4 gained "HTTP client" — all outbound HTTP through `Illuminate\Http\Client`; `guzzlehttp/guzzle` an explicit `composer.json` requirement because Guzzle option keys are passed through `withOptions()`; Guzzle 8.0's reworked exception hierarchy means Laravel normalises every transport failure to `Illuminate\Http\Client\ConnectionException` (catching `GuzzleHttp\Exception\ConnectException` would miss timeouts), mapped to `ok:false`/`status_code:0` on `POST /report`, with a failed report logged and never rethrown. Section 4 also gained "Fixture mode" (`SCRAPER_MODE=fixture` swaps only the transport; iterates `resources/fixtures/manifest.json` — `file`/`source_url`/`captured_at`; no lease, no report; the lease loop is live-mode only). Section 2 gained `SCRAPER_RESPECT_ROBOTS` (default `true`) and the rule that every backend var must appear in both `backend/.env.example` and `docker-compose.yml`.
