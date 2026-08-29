@@ -162,15 +162,16 @@ interface SiteExtractor
 {
     public function supports(string $host): bool;
 
-    public function extract(Crawler $html, string $sourceUrl): ProductData;
+    public function extract(Crawler $html, string $sourceUrl): ?ProductData;
 }
 ```
+`extract()` returns `null` in exactly one case: the page is valid but the product is legitimately out of stock and carries no price. The caller logs at info level and skips it. Every other problem — malformed price text, missing title, markup that changed — throws. Null is not a general failure signal.
 
 `extract()` receives `$sourceUrl` as well as the DOM — the extractor is the only place that knows how to resolve a site's relative image URLs, and it needs the base URL to do it.
 
 `ProductData` is a readonly value object, not an array. It is the boundary between "parsing" and "persistence", and a typed object means a missing field is a constructor error at the extractor, not a silent null three layers later.
 
-Extractors throw `ExtractionFailedException` when a required selector matches nothing. They never return a half-populated object.
+Extractors throw `App\Exceptions\ExtractionFailedException` for every failure that is not out-of-stock — a required selector matching nothing, price text that will not parse, a title that comes back empty. They never return a half-populated object. The exception message carries the source URL and which selector failed.
 
 **Field list: pending.** See the open question at the bottom of this file.
 
