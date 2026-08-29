@@ -1,0 +1,32 @@
+[
+  {
+    "id": "ua-chrome-mac",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+  },
+  {
+    "id": "ua-chrome-win",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+  },
+  {
+    "id": "ua-chrome-linux",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+  },
+  {
+    "id": "ua-firefox-win",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+  },
+  {
+    "id": "ua-safari-mac",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+  },
+  {
+    "id": "ua-edge-win",
+    "proxy_url": null,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0"
+  }
+]

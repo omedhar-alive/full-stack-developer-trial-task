@@ -37,6 +37,7 @@ Names are frozen because they appear in `.env.example`, `docker-compose.yml`, co
 | `FAILURE_THRESHOLD` | `3` | consecutive failures before benching |
 | `COOLDOWN_BASE_SECONDS` | `30` | first cooldown |
 | `COOLDOWN_MAX_SECONDS` | `600` | cooldown ceiling |
+| `LEASE_TTL_SECONDS` | `120` | unreported leases reaped after this |
 | `LOG_LEVEL` | `info` | slog level |
 
 ### backend / worker (Laravel)

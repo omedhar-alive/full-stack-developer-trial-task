@@ -18,7 +18,10 @@ RUN apk add --no-cache ca-certificates \
     && adduser -D -u 10001 app
 USER app
 
+WORKDIR /app
 COPY --from=build /out/proxy-manager /usr/local/bin/proxy-manager
+# PROXY_POOL_FILE defaults to /app/proxies.json; ship the seed at that path.
+COPY proxies.json /app/proxies.json
 
 EXPOSE 8080
 ENTRYPOINT ["proxy-manager"]

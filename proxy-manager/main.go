@@ -1,6 +1,6 @@
-// Command proxy-manager is the Go service that will own proxy/user-agent
-// leasing and health scoring. Phase 1 ships only the liveness endpoint and the
-// server lifecycle; the pool logic lands in phase 2.
+// Command proxy-manager is the Go service that owns proxy/user-agent leasing and
+// health scoring. main.go is wiring only: config, pool load, routes, lifecycle.
+// The pool and its state machine live in pool.go; the HTTP layer in handlers.go.
 package main
 
 import (
@@ -11,10 +11,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
+
+// reapInterval is how often the background reaper runs. Lease and Report also
+// reap lazily; this only matters when the service is receiving no traffic.
+const reapInterval = 30 * time.Second
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -22,14 +27,28 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	poolFile := getenv("PROXY_POOL_FILE", "/app/proxies.json")
+	seeds, err := loadSeedFile(poolFile)
+	if err != nil {
+		slog.Error("cannot load proxy pool", "error", err)
+		os.Exit(1)
+	}
+	pool, err := NewPool(seeds, PoolConfig{
+		FailureThreshold: getenvInt("FAILURE_THRESHOLD", 3),
+		CooldownBase:     time.Duration(getenvInt("COOLDOWN_BASE_SECONDS", 30)) * time.Second,
+		CooldownMax:      time.Duration(getenvInt("COOLDOWN_MAX_SECONDS", 600)) * time.Second,
+		LeaseTTL:         time.Duration(getenvInt("LEASE_TTL_SECONDS", 120)) * time.Second,
+	})
+	if err != nil {
+		slog.Error("invalid proxy pool", "error", err, "file", poolFile)
+		os.Exit(1)
+	}
+	slog.Info("proxy pool loaded", "file", poolFile, "entries", len(seeds))
+
 	port := getenv("PORT", "8080")
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handleHealthz)
-
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           logRequests(mux),
+		Handler:           logRequests(newMux(pool)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -39,6 +58,8 @@ func main() {
 	// Serve until SIGINT/SIGTERM, then drain in-flight requests before exiting.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	go reapLoop(ctx, pool)
 
 	go func() {
 		slog.Info("proxy-manager listening", "addr", srv.Addr)
@@ -60,8 +81,18 @@ func main() {
 	slog.Info("stopped")
 }
 
-func handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+// reapLoop clears abandoned leases while the service is idle.
+func reapLoop(ctx context.Context, pool *Pool) {
+	t := time.NewTicker(reapInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			pool.ReapNow()
+		}
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -87,6 +118,19 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getenvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		slog.Warn("invalid integer env var; using default", "key", key, "value", v, "default", fallback)
+		return fallback
+	}
+	return n
 }
 
 func parseLevel(s string) slog.Level {
