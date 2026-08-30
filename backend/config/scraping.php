@@ -44,10 +44,19 @@ return [
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
     ],
 
-    // Live-mode target list for `php artisan scrape:run --live`. Kept in the
-    // same order as resources/fixtures/manifest.json and one-to-one with it:
-    // boot seeding runs a fixture pass then a live pass, both updateOrCreate on
-    // source_url, so a diverging list would silently double the catalogue.
+    // Live-mode target list for `php artisan scrape:run --live`.
+    //
+    // Every entry MUST be a subset of resources/fixtures/manifest.json (a
+    // source_url that also has a committed fixture). Boot seeding runs a
+    // fixture pass then a live pass, both updateOrCreate on source_url: a
+    // target with no matching fixture creates a second row and doubles that
+    // product; a fixture with no target is harmless — the fixture pass makes
+    // the row and the live pass never touches it. So the subset only needs to
+    // hold in this direction.
+    //
+    // Kept deliberately small: a default `docker compose up` should make a
+    // handful of throttled live requests to exercise the lease/report loop,
+    // not one per fixture.
     'targets' => [
         'https://www.jumia.com.eg/apple-iphone-17-pro-max-6.9-256gb-rom-ios-26-5g-cosmic-orange-134276913.html',
         'https://www.jumia.com.eg/galaxy-a07-dual-sim-4g-128gb4gb-mobile-phone-light-violet-samsung-mpg3859614.html',
