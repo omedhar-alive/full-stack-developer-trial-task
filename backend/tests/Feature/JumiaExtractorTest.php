@@ -28,6 +28,16 @@ function jumiaFixture(): array
     ];
 }
 
+it('supports the real Jumia host and its subdomains but rejects lookalikes', function () {
+    $extractor = new JumiaExtractor;
+
+    expect($extractor->supports('jumia.com.eg'))->toBeTrue()
+        ->and($extractor->supports('www.jumia.com.eg'))->toBeTrue()
+        ->and($extractor->supports('WWW.JUMIA.COM.EG'))->toBeTrue()
+        ->and($extractor->supports('notjumia.com'))->toBeFalse()
+        ->and($extractor->supports('jumia.com.eg.evil.com'))->toBeFalse();
+});
+
 it('extracts every ProductData field from the saved Jumia product page', function () {
     ['html' => $html, 'url' => $url] = jumiaFixture();
 

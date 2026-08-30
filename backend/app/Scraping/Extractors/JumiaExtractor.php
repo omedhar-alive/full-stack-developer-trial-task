@@ -21,9 +21,24 @@ final class JumiaExtractor implements SiteExtractor
     /** Substrings of schema.org availability values that mean "no sale right now". */
     private const OUT_OF_STOCK = ['outofstock', 'soldout', 'discontinued', 'backorder'];
 
+    /**
+     * Registrable domains this extractor serves. A host matches when it equals
+     * one of these or is a subdomain of it — never merely contains it, so
+     * "notjumia.com" and "jumia.com.eg.evil.com" are rejected.
+     */
+    private const HOSTS = ['jumia.com.eg'];
+
     public function supports(string $host): bool
     {
-        return str_contains(strtolower($host), 'jumia.');
+        $host = strtolower($host);
+
+        foreach (self::HOSTS as $domain) {
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function extract(Crawler $html, string $sourceUrl): ?ProductData
