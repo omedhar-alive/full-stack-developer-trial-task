@@ -76,7 +76,7 @@ final class ProxyClient
         }
 
         try {
-            Http::acceptJson()
+            $response = Http::acceptJson()
                 ->connectTimeout(self::CONNECT_TIMEOUT)
                 ->timeout(self::READ_TIMEOUT)
                 ->post($this->url('/report'), [
@@ -85,6 +85,17 @@ final class ProxyClient
                     'status_code' => $statusCode ?? 0,
                     'latency_ms' => $latencyMs,
                 ]);
+
+            if (! $response->successful()) {
+                // Laravel's HTTP client does not throw on 4xx/5xx, so a 400
+                // (malformed body) or 404 (unknown, already-reported or reaped
+                // lease) would otherwise vanish. The health data is already
+                // lost; log it, but still do not fail the scrape.
+                Log::warning('proxy report rejected; continuing', [
+                    'lease_id' => $lease->leaseId,
+                    'status' => $response->status(),
+                ]);
+            }
         } catch (\Throwable $e) {
             Log::warning('proxy report failed; continuing', [
                 'lease_id' => $lease->leaseId,
