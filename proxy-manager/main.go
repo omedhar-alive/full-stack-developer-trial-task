@@ -39,12 +39,7 @@ func main() {
 		slog.Error("cannot load proxy pool", "error", err)
 		os.Exit(1)
 	}
-	pool, err := NewPool(seeds, PoolConfig{
-		FailureThreshold: getenvInt("FAILURE_THRESHOLD", 3),
-		CooldownBase:     time.Duration(getenvInt("COOLDOWN_BASE_SECONDS", 30)) * time.Second,
-		CooldownMax:      time.Duration(getenvInt("COOLDOWN_MAX_SECONDS", 600)) * time.Second,
-		LeaseTTL:         time.Duration(getenvInt("LEASE_TTL_SECONDS", 120)) * time.Second,
-	})
+	pool, err := NewPool(seeds, poolConfigFromEnv())
 	if err != nil {
 		slog.Error("invalid proxy pool", "error", err, "file", poolFile)
 		os.Exit(1)
@@ -85,6 +80,20 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("stopped")
+}
+
+// poolConfigFromEnv reads the circuit-breaker tunables from the environment,
+// each falling back to the default documented in CONTRACTS.md §2. Split out of
+// main() so a test can exercise those defaults: docker-compose.yml now sets all
+// four explicitly, so a typo in one of these literals would otherwise never be
+// hit anywhere.
+func poolConfigFromEnv() PoolConfig {
+	return PoolConfig{
+		FailureThreshold: getenvInt("FAILURE_THRESHOLD", 3),
+		CooldownBase:     time.Duration(getenvInt("COOLDOWN_BASE_SECONDS", 30)) * time.Second,
+		CooldownMax:      time.Duration(getenvInt("COOLDOWN_MAX_SECONDS", 600)) * time.Second,
+		LeaseTTL:         time.Duration(getenvInt("LEASE_TTL_SECONDS", 120)) * time.Second,
+	}
 }
 
 // reapLoop clears abandoned leases while the service is idle.
