@@ -16,6 +16,3 @@ from a fresh clone with no `-f` flag.
 
 Ports and hostnames are frozen in `../CONTRACTS.md` section 1. Environment
 variable names are frozen in section 2.
-
-This directory will gain shared assets in later phases (e.g. the proxy pool
-seed file).

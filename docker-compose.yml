@@ -90,6 +90,15 @@ services:
     environment:
       PORT: "8080"
       LOG_LEVEL: info
+      # These five are the Go code's own defaults (CONTRACTS.md §2), written out
+      # so a reviewer can change circuit-breaker behaviour in one obvious place
+      # rather than reading main.go — e.g. FAILURE_THRESHOLD: "1" makes the
+      # breaker trip on a single failure.
+      PROXY_POOL_FILE: /app/proxies.json
+      FAILURE_THRESHOLD: "3"
+      COOLDOWN_BASE_SECONDS: "30"
+      COOLDOWN_MAX_SECONDS: "600"
+      LEASE_TTL_SECONDS: "120"
     ports:
       - "8080:8080"
     healthcheck:
@@ -111,6 +120,20 @@ services:
       HOSTNAME: "0.0.0.0"
     ports:
       - "3000:3000"
+    healthcheck:
+      # 127.0.0.1, not localhost: HOSTNAME=0.0.0.0 is IPv4-only, and Node's
+      # fetch can resolve localhost to ::1 and be refused against a healthy
+      # server. The .catch stops a refused connection during boot from printing
+      # a stack trace on every probe. Node rather than wget/curl because the
+      # Node runtime is the one thing guaranteed present in a Node image.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # No health condition on backend on purpose: the Server Component has a 5s
+    # abort and falls through to the client fetch, so waiting on backend health
+    # would slow startup to buy something already handled.
     depends_on:
       - backend
 

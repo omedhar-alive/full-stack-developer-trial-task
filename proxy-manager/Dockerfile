@@ -4,8 +4,8 @@
 FROM golang:1.26 AS build
 WORKDIR /src
 
-# go.sum is absent until the first external dependency is added (phase 2);
-# the glob keeps this COPY valid either way.
+# The service has no external dependencies, so there is no go.sum. The glob
+# keeps this COPY valid if one is ever added.
 COPY go.mod go.su[m] ./
 RUN go mod download
 

@@ -18,7 +18,13 @@ import (
 )
 
 // reapInterval is how often the background reaper runs. Lease and Report also
-// reap lazily; this only matters when the service is receiving no traffic.
+// reap lazily, so this ticker only matters when the service is receiving no
+// traffic at all. It is a hardcoded constant, not an env var, on purpose: it
+// is an internal safety net for that zero-traffic case, not a tuning knob. The
+// value that actually governs behaviour — how long an unreported lease is held
+// before it is considered abandoned — is LEASE_TTL_SECONDS, and that is
+// already configurable; how often we sweep for expired ones is not worth an
+// operational surface.
 const reapInterval = 30 * time.Second
 
 func main() {
