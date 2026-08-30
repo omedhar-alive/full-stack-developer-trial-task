@@ -44,13 +44,18 @@ return [
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15',
     ],
 
-    // Live-mode target list for `php artisan scrape:run`. Fixture mode ignores
-    // this and iterates resources/fixtures/manifest.json instead.
+    // Live-mode target list for `php artisan scrape:run --live`. Kept in the
+    // same order as resources/fixtures/manifest.json and one-to-one with it:
+    // boot seeding runs a fixture pass then a live pass, both updateOrCreate on
+    // source_url, so a diverging list would silently double the catalogue.
     'targets' => [
         'https://www.jumia.com.eg/apple-iphone-17-pro-max-6.9-256gb-rom-ios-26-5g-cosmic-orange-134276913.html',
         'https://www.jumia.com.eg/galaxy-a07-dual-sim-4g-128gb4gb-mobile-phone-light-violet-samsung-mpg3859614.html',
         'https://www.jumia.com.eg/honor-x6c-dual-sim-4g-128gb6gb-ocean-cyan-134895074.html',
         'https://www.jumia.com.eg/infinix-x6840b-64gb4gb-smart-20-mobile-phone-with-charger-cloudline-blue-134515921.html',
+        'https://www.jumia.com.eg/arion-43-inch-full-hd-smart-android-tv-a-grade-panel-frameless-design-wi-fi-hdmi-usb-connectivity-ar-43-t4s-134057390.html',
+        'https://www.jumia.com.eg/bahi-powder-lavander-1500-g-45488781.html',
+        'https://www.jumia.com.eg/arion-electric-glass-kettle-2.2l-ar-1224-133645424.html',
     ],
 
 ];

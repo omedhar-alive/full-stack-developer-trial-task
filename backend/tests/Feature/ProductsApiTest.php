@@ -28,6 +28,10 @@ it('returns exactly the seven contract fields and the pagination envelope', func
         ->assertJsonPath('data.0.price', 129.99)
         ->assertJsonPath('data.0.currency', 'EGP')
         ->assertJsonPath('data.0.title', 'Infinix Hot 40i 256GB')
+        // Pin the created_at format (CONTRACTS.md §6; phase 6's TS type is
+        // written against it): YYYY-MM-DDTHH:mm:ss.SSSSSSZ, six microsecond
+        // digits, always zero because the columns are second-precision.
+        ->assertJsonPath('data.0.created_at', fn (string $v) => (bool) preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/', $v))
         ->assertJsonMissingPath('data.0.price_minor')
         ->assertJsonMissingPath('data.0.updated_at');
 

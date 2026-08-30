@@ -312,11 +312,11 @@ The frontend reads `response.data`. Not `response`. Laravel emits `links` alongs
 
 `price` is a **number in major units**, already divided by 100 in `ProductResource`. `price_minor` is never exposed. The frontend does no arithmetic on money and has no `/ 100` anywhere in it — that is what makes a float safe here.
 
-Ordering: orderByDesc('created_at') then orderByDesc('id') as a tiebreaker, 20 per page.
+Ordering: `orderByDesc('created_at')` then `orderByDesc('id')` as a tiebreaker, 20 per page.
 
-The tiebreaker is not cosmetic. $table->timestamps() creates second-precision columns, and a batch scrape inserts every row inside the same second — so ties are the normal case, not an edge case. Without a deterministic second key the sort order is whatever InnoDB returns, and under LIMIT/OFFSET pagination that means a row can appear on both page 1 and page 2, or on neither. id is monotonic and unique, so it settles every tie and matches insertion order.
+The tiebreaker is not cosmetic. `$table->timestamps()` creates second-precision columns, and a batch scrape inserts every row inside the same second — so ties are the normal case, not an edge case. Without a deterministic second key the sort order is whatever InnoDB returns, and under `LIMIT/OFFSET` pagination that means a row can appear on both page 1 and page 2, or on neither. `id` is monotonic and unique, so it settles every tie and matches insertion order.
 
-per_page is fixed at 20 and is not client-controllable — ?per_page=100000 would be a free way to make the server materialise the whole table.
+`per_page` is fixed at 20 and is not client-controllable — `?per_page=100000` would be a free way to make the server materialise the whole table.
 
 Rate limit: `throttle:60,1`.
 
