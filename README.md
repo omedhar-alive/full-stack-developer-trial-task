@@ -29,6 +29,21 @@ docker compose up --build
 
 Then open **http://localhost:3000/products**.
 
+The stack publishes four surfaces:
+
+| URL | What it serves |
+| --- | --- |
+| `http://localhost:3000/products` | The UI: server-rendered first paint, then polled every 30s. |
+| `http://localhost:8000/api/products` | The paginated JSON API, shaped `{ data, meta }`. |
+| `http://localhost:8000/api/health` | Backend liveness. |
+| `http://localhost:8080/metrics` | The Go proxy pool: every entry's failure count, cooldown and last-used time, plus leases issued and reports received. |
+
+`/metrics` is where the lease/report loop is observable. Curl it, wait for the
+queued live pass to run, then curl it again: `leases_issued` and
+`reports_received` will have moved. If a live fetch is blocked, the failing
+entry's `failures` climbs and it eventually shows a `cooldown_until` — that is
+the circuit breaker working, not a bug.
+
 The grid is populated from committed HTML fixtures during backend boot, so it is
 never empty on first load. A second, queued pass then attempts a handful of live
 Jumia fetches to exercise the lease/report loop — those may fail without
