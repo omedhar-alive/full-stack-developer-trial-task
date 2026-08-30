@@ -36,8 +36,15 @@ jobs:
 
       - run: composer install --prefer-dist --no-interaction
 
-      # phpunit.xml (and tests/bootstrap.php) pin the suite to sqlite :memory:,
-      # so no database service is needed.
+      # Only so APP_KEY exists — .env is gitignored, and a missing key would
+      # fail the suite the moment anything resolves the encrypter. The database
+      # connection does NOT come from here: tests/bootstrap.php pins it to
+      # sqlite :memory: via putenv/$_SERVER before Dotenv loads, and Dotenv does
+      # not overwrite existing values, so .env.example's DB_CONNECTION=mysql
+      # never reaches the suite.
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+
       - run: php artisan test
 
   proxy:

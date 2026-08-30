@@ -56,10 +56,11 @@ failed thirty seconds ago, how many times, how long it is benched for. PHP is
 request-scoped: a process handles one request and dies, so it cannot hold that.
 Go runs long-lived and keeps the pool in memory.
 
-*Tradeoff:* two extra localhost HTTP calls per scrape (sub-millisecond) and one
-more service to run and debug. The fallback below means Laravel still scrapes if
-Go is down — it just loses health scoring and rotation, so this is "in the path
-with a degraded fallback", not "hard dependency".
+*Tradeoff:* two extra HTTP calls on the compose network per scrape
+(sub-millisecond) and one more service to run and debug. The fallback below
+means Laravel still scrapes if Go is down — it just loses health scoring and
+rotation, so this is "in the path with a degraded fallback", not "hard
+dependency".
 
 ### Circuit breaker, and where the attribution rule lives
 

@@ -34,6 +34,18 @@ func TestPoolConfigFromEnvDefaults(t *testing.T) {
 	}
 }
 
+// PROXY_POOL_FILE's default is read by poolFileFromEnv, not poolConfigFromEnv,
+// so the test above does not reach it. Compose sets it explicitly, leaving this
+// as the only exercise of the /app/proxies.json literal.
+func TestPoolFileFromEnvDefault(t *testing.T) {
+	// Set empty rather than unset so an ambient value cannot leak in.
+	t.Setenv("PROXY_POOL_FILE", "")
+
+	if got := poolFileFromEnv(); got != "/app/proxies.json" {
+		t.Errorf("poolFileFromEnv() = %q, want /app/proxies.json", got)
+	}
+}
+
 // A non-integer value must fall back to the field's default, not panic:
 // getenvInt logs a warning and returns the fallback.
 func TestPoolConfigFromEnvNonIntegerFallsBack(t *testing.T) {

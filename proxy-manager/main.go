@@ -33,7 +33,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	poolFile := getenv("PROXY_POOL_FILE", "/app/proxies.json")
+	poolFile := poolFileFromEnv()
 	seeds, err := loadSeedFile(poolFile)
 	if err != nil {
 		slog.Error("cannot load proxy pool", "error", err)
@@ -94,6 +94,14 @@ func poolConfigFromEnv() PoolConfig {
 		CooldownMax:      time.Duration(getenvInt("COOLDOWN_MAX_SECONDS", 600)) * time.Second,
 		LeaseTTL:         time.Duration(getenvInt("LEASE_TTL_SECONDS", 120)) * time.Second,
 	}
+}
+
+// poolFileFromEnv is separate from poolConfigFromEnv because the seed file path
+// is a main-package concern, not pool state — PoolConfig has no business
+// carrying a filesystem path. Split out for the same reason: compose now sets
+// PROXY_POOL_FILE explicitly, so a test is the only place the default is hit.
+func poolFileFromEnv() string {
+	return getenv("PROXY_POOL_FILE", "/app/proxies.json")
 }
 
 // reapLoop clears abandoned leases while the service is idle.
