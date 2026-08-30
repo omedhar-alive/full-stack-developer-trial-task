@@ -17,6 +17,12 @@ export function Providers({ children }: { children: ReactNode }) {
             // duplicate fetch the moment it hydrates.
             staleTime: 30_000,
             retry: 1,
+            // The API is on localhost / the compose network, not the internet.
+            // The default 'online' mode pauses a failed query until the
+            // browser reports connectivity — so with the backend down the grid
+            // would sit on the skeleton forever instead of showing the error
+            // and a Retry button.
+            networkMode: "always",
           },
         },
       }),
