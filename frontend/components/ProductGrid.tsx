@@ -95,22 +95,29 @@ export function ProductGrid({ initialData }: { initialData: ProductsResponse | n
         </div>
       )}
 
+      {/* Controls follow local `page`, not `meta.current_page`. With
+          keepPreviousData, `meta` describes the response currently on screen,
+          not the page being requested — during a fetch the two disagree, and
+          driving Next off the stale `current_page` lets the user click past the
+          last page ("Page 3 of 2", empty grid). `meta.last_page` is safe as the
+          ceiling: it's constant across pages of one result set, so its lag is
+          harmless. */}
       <div className="mt-10 flex items-center justify-between">
         <button
           type="button"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={meta.current_page <= 1}
+          disabled={page <= 1}
           className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700"
         >
           Previous
         </button>
         <span className="text-sm text-zinc-600 dark:text-zinc-400">
-          Page {meta.current_page} of {meta.last_page}
+          Page {page} of {meta.last_page}
         </span>
         <button
           type="button"
-          onClick={() => setPage((p) => p + 1)}
-          disabled={meta.current_page >= meta.last_page}
+          onClick={() => setPage((p) => Math.min(p + 1, meta.last_page))}
+          disabled={page >= meta.last_page}
           className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700"
         >
           Next

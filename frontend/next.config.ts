@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
     // no layout shift. Stated as a deviation in the phase 7 README.
     unoptimized: true,
   },
+
+  // `next dev` otherwise writes AGENTS.md and CLAUDE.md at the project root
+  // when it detects an AI coding agent, pointing it at the version-matched
+  // docs bundled in node_modules/next/dist/docs/. Those files are tool
+  // configuration nobody authored — not project deliverables — so the repo
+  // shouldn't carry them. Not gitignored as well: with generation off there
+  // is no file to ignore.
+  agentRules: false,
 };
 
 export default nextConfig;
